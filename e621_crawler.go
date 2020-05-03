@@ -3,13 +3,31 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
-var HomeURL string = "https://www.e621.net/posts.json"
+var homeURL string = "https://www.e621.net/posts.json"
+var e621RateLimiter = time.Tick(501 * time.Millisecond)
+
+var missingPID = []int{}
+
+type e621Post struct {
+	ID   int `json:"id"`
+	File struct {
+		URL string `json:"url"`
+		Ext string `json:"ext"`
+	} `json:"file"`
+}
+
+type e621PostList struct {
+	Posts []e621Post `json:"posts"`
+}
 
 func safeGet(URL string) *http.Response {
 	// !! the caller are responsible to call "defer response.Body.Close()" for clean up
@@ -18,10 +36,6 @@ func safeGet(URL string) *http.Response {
 		log.Fatal(err)
 	}
 	return response
-}
-
-func getE621Post(tag map[string]string, limit int, page int) string {
-	return "hi"
 }
 
 func addParamToURL(URL string, param map[string]string) string {
@@ -40,37 +54,35 @@ func addParamToURL(URL string, param map[string]string) string {
 
 }
 
-type e621Post struct {
-	ID   int `json:"id"`
-	File struct {
-		URL string `json:"url"`
-		Ext string `json:"ext"`
-	} `json:"file"`
-}
-
-type e621PostList struct {
-	Posts []e621Post `json:"posts"`
-}
-
 func getFileNameFromPost(post e621Post) string {
 	return strconv.Itoa(post.ID) + "." + post.File.Ext
 }
 
-func downloadPhoto(URL string, path string) {
+func downloadPhoto(path string, URL string) bool {
 	fmt.Println("downloading: " + URL + "\n\tto: " + path)
 
+	webResponse := safeGet(URL)
+	defer webResponse.Body.Close()
+
+	fileResponse, err := os.Create(path)
+	if err != nil {
+		log.Fatal(err)
+		return false
+	}
+	defer fileResponse.Close()
+
+	_, err = io.Copy(fileResponse, webResponse.Body)
+	if err != nil {
+		log.Fatal(err)
+		return false
+	}
+
+	return true
 }
 
-func main() {
-	var UserName = "eiffelwong1"
-	var StorageLoc = "/Users/eiffelwong1/Desktop/e621"
-	var Limit = 2
-	var Page = 0
-
-	fmt.Println("start")
-
-	params := map[string]string{"limit": strconv.Itoa(Limit), "tags": "fav:" + UserName, "page": strconv.Itoa(Page)}
-	URL := addParamToURL(HomeURL, params)
+func downloadE621Page(storagePath string, userName string, limit int, page int) int {
+	params := map[string]string{"tags": "fav:" + userName, "limit": strconv.Itoa(limit), "page": strconv.Itoa(page)}
+	URL := addParamToURL(homeURL, params)
 	fmt.Println(URL)
 
 	posts := e621PostList{}
@@ -83,7 +95,36 @@ func main() {
 	fmt.Println(posts.Posts)
 
 	for _, p := range posts.Posts {
-		downloadPhoto(p.File.URL, StorageLoc+"/"+getFileNameFromPost(p))
+		<-e621RateLimiter
+		if p.File.URL == "" {
+			go handleMissingURLWithPostID(p.ID)
+			continue
+		}
+		go downloadPhoto(storagePath+"/"+getFileNameFromPost(p), p.File.URL)
+	}
+
+	return len(posts.Posts)
+}
+
+func handleMissingURLWithPostID(pid int) {
+	missingPID = append(missingPID, pid)
+}
+
+func main() {
+	var userName = "eiffelwong1"
+	var storagePath = "/Users/eiffelwong1/Desktop/e621"
+	var postLimit = 320
+
+	var page int = 0
+
+	fmt.Println("start")
+
+	for {
+		<-e621RateLimiter
+		downloadCount := downloadE621Page(storagePath, userName, postLimit, page)
+		if downloadCount < postLimit {
+			break
+		}
 	}
 
 	return

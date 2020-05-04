@@ -79,6 +79,7 @@ func downloadPhoto(path string, URL string) bool {
 	}
 	defer fileResponse.Close()
 
+	//TODO: webResponse can be cut off by e621 server side, so need better error handing here
 	_, err = io.Copy(fileResponse, webResponse.Body)
 	if err != nil {
 		log.Fatal(err)

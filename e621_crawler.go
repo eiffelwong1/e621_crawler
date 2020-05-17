@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v2"
 )
 
 var homeURL string = "https://www.e621.net/posts.json"
@@ -129,6 +133,7 @@ func removeFromE621PageList(posts *e621PostList, i int) {
 }
 
 func handleMissingURLWithPostID(pid int) {
+	//TODO: lol, do something to the pid?
 	missingPID = append(missingPID, pid)
 }
 
@@ -159,9 +164,70 @@ func removeFileNameExt(name string) string {
 	return strings.Join(splitString[:len(splitString)-1], ".")
 }
 
+//UserData stores the basic user information
+type UserData struct {
+	UserName    string //user name on E621 or whom's fav you wanted to download
+	StoragePath string //where photos are stored
+}
+
+func getUserData() UserData {
+	//check if store user data existed
+	fileName := "./UserData.yaml"
+	var userData UserData
+	// if the expected filepath contains a valid user data yaml, use it or promp User for input
+	if _, err := os.Stat(fileName); err == nil {
+		yamlFile, err := ioutil.ReadFile(fileName)
+		err = yaml.Unmarshal(yamlFile, &userData)
+		if err != nil {
+			log.Println(err)
+		} else if prompForUsingStoredUserData(userData) {
+			return userData
+		}
+	}
+	return prompForUserData()
+}
+
+func prompForString(question string) string {
+	scanner := bufio.NewScanner(os.Stdin)
+	fmt.Println(question)
+	scanner.Scan()
+	if scanner.Err() != nil {
+		log.Println(scanner.Err())
+	}
+	return scanner.Text()
+}
+
+func prompForUserData() UserData {
+	var userData UserData
+	userData.UserName = prompForString("please enter username for e621: ")
+	userData.StoragePath = prompForString("please enter the where you want to store the photos (or '.' for the current file): ")
+	return userData
+}
+
+func prompForUsingStoredUserData(userData UserData) bool {
+
+	fmt.Printf("stored info found\n"+
+		"------------------------\n"+
+		"User Name : %s\n"+
+		"Storage Path : %s\n"+
+		"use stored info ? (Y/N)\n", userData)
+	for {
+		result := prompForString("please enter input: ")
+		if result[0] == 'y' || result[0] == 'Y' {
+			return true
+		} else if result[0] == 'n' || result[0] == 'N' {
+			return false
+		} else {
+			fmt.Println("please only input Y or N")
+		}
+
+	}
+}
+
 func main() {
-	var userName = "eiffelwong1"
-	var storagePath = "/Users/eiffelwong1/Desktop/e621"
+	currentUserData := prompForUserData()
+	var userName = currentUserData.UserName
+	var storagePath = currentUserData.StoragePath
 	var postLimit = 320
 
 	var pageNum int = 0

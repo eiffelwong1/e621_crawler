@@ -176,7 +176,6 @@ type UserData struct {
 
 func getUserData() UserData {
 	//check if store user data existed
-
 	var userData UserData
 	// if the expected filepath contains a valid user data yaml, use it or promp User for input
 	if _, err := os.Stat(UserDataYAML); err == nil {
@@ -192,7 +191,19 @@ func getUserData() UserData {
 }
 
 func storeUserData(userData UserData) {
+	out, err := yaml.Marshal(userData)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	f, err := os.Create(UserDataYAML)
+	defer f.Close()
 
+	_, err = f.Write(out)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 }
 
 func prompForString(question string) string {
@@ -209,6 +220,7 @@ func prompForUserData() UserData {
 	var userData UserData
 	userData.UserName = prompForString("please enter username for e621: ")
 	userData.StoragePath = prompForString("please enter the where you want to store the photos (or '.' for the current file): ")
+	storeUserData(userData)
 	return userData
 }
 
@@ -218,7 +230,8 @@ func prompForUsingStoredUserData(userData UserData) bool {
 		"------------------------\n"+
 		"User Name : %s\n"+
 		"Storage Path : %s\n"+
-		"use stored info ? (Y/N)\n", userData)
+		"------------------------\n"+
+		"use stored info ? (Y/N)\n", userData.UserName, userData.StoragePath)
 	for {
 		result := prompForString("please enter input: ")
 		if result[0] == 'y' || result[0] == 'Y' {
@@ -233,7 +246,7 @@ func prompForUsingStoredUserData(userData UserData) bool {
 }
 
 func main() {
-	currentUserData := prompForUserData()
+	currentUserData := getUserData()
 	var userName = currentUserData.UserName
 	var storagePath = currentUserData.StoragePath
 	var postLimit = 320

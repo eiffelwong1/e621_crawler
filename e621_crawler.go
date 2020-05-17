@@ -17,7 +17,11 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var homeURL string = "https://www.e621.net/posts.json"
+//HomeURL is the URL for where to scrape E621
+var HomeURL string = "https://www.e621.net/posts.json"
+
+//UserDataYAML is path where userdata will be stored
+var UserDataYAML string = "./UserData.yaml"
 var e621RateLimiter = time.Tick(1010 * time.Millisecond)
 
 var missingPID = []int{}
@@ -95,7 +99,7 @@ func downloadPhoto(path string, URL string) bool {
 
 func downloadE621Page(userName string, limit int, page int) e621PostList {
 	params := map[string]string{"tags": "fav:" + userName, "limit": strconv.Itoa(limit), "page": strconv.Itoa(page)}
-	URL := addParamToURL(homeURL, params)
+	URL := addParamToURL(HomeURL, params)
 	fmt.Println(URL)
 
 	response := safeGet(URL)
@@ -172,11 +176,11 @@ type UserData struct {
 
 func getUserData() UserData {
 	//check if store user data existed
-	fileName := "./UserData.yaml"
+
 	var userData UserData
 	// if the expected filepath contains a valid user data yaml, use it or promp User for input
-	if _, err := os.Stat(fileName); err == nil {
-		yamlFile, err := ioutil.ReadFile(fileName)
+	if _, err := os.Stat(UserDataYAML); err == nil {
+		yamlFile, err := ioutil.ReadFile(UserDataYAML)
 		err = yaml.Unmarshal(yamlFile, &userData)
 		if err != nil {
 			log.Println(err)
@@ -185,6 +189,10 @@ func getUserData() UserData {
 		}
 	}
 	return prompForUserData()
+}
+
+func storeUserData(userData UserData) {
+
 }
 
 func prompForString(question string) string {
